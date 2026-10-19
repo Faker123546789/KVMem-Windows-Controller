@@ -1,0 +1,32 @@
+# Local KVMem runtime and model weights
+/runtime/
+/models/
+*.gguf
+
+# Machine-local runtime data, logs and process state
+/codex/
+*.log
+*.pid
+*.stderr
+*.stdout
+
+# Secrets, local settings and key material
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.pfx
+*.p12
+credentials.json
+secrets.json
+
+# Windows / editor files
+Thumbs.db
+Desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+/payloads/
+/.tools/
