@@ -3,8 +3,22 @@
 param([string]$ModelRoot = (Join-Path $PSScriptRoot 'models'))
 
 $ErrorActionPreference = 'Stop'
+$root = $PSScriptRoot
+$localizationModule = Join-Path $root 'KVMem-Localization.psm1'
+if (!(Test-Path -LiteralPath $localizationModule -PathType Leaf)) { throw 'KVMem language resources are missing; re-extract the complete package.' }
+Import-Module $localizationModule -Force
+$languageFile = Join-Path $root 'codex\ui-language.json'
+if (Test-Path -LiteralPath $languageFile -PathType Leaf) {
+    try {
+        $savedLanguage = (Get-Content -LiteralPath $languageFile -Raw | ConvertFrom-Json).Language
+        if ($savedLanguage -in @('zh','en')) { Set-KVMemUiLanguage -Language $savedLanguage }
+    } catch { Set-KVMemUiLanguage -Language 'zh' }
+}
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+function Show-LocalizedMessage([string]$Message,[string]$Caption='KVMem',[string]$Buttons='OK',[string]$Icon='Information') {
+    return [Windows.Forms.MessageBox]::Show((Get-KVMemUiText $Message),(Get-KVMemUiText $Caption),$Buttons,$Icon)
+}
 Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
@@ -103,10 +117,23 @@ public static class KVMemStatusProbe {
 '@
 [void][System.Windows.Forms.Application]::SetHighDpiMode([System.Windows.Forms.HighDpiMode]::PerMonitorV2)
 [System.Windows.Forms.Application]::EnableVisualStyles()
-$root = $PSScriptRoot
 $startScript = Join-Path $root 'Start-KVMem.ps1'
 $stopScript = Join-Path $root 'Stop-KVMem.ps1'
 $serverPath = [IO.Path]::GetFullPath((Join-Path $root 'runtime\bin\llama-kvmem-server.exe'))
+$compatibilityModule = Join-Path $root 'KVMem-Compatibility.psm1'
+if (!(Test-Path -LiteralPath $compatibilityModule -PathType Leaf)) {
+    $missingModuleMessage=if((Get-KVMemUiLanguage) -eq 'en'){"KVMem GPU compatibility checker is missing: $compatibilityModule`r`nRe-extract the complete portable package."}else{"缺少 KVMem 显卡兼容性检查模块：$compatibilityModule`r`n请重新解压完整的便携包。"}
+    [void](Show-LocalizedMessage $missingModuleMessage 'KVMem 兼容性检查' 'OK' 'Error')
+    exit 2
+}
+Import-Module $compatibilityModule -Force
+$script:backendCompatibility = Get-KVMemBackendCompatibility -ServerPath $serverPath
+if (!$script:backendCompatibility.Supported) {
+    $compatibilityMessage = if ((Get-KVMemUiLanguage) -eq 'en') { $script:backendCompatibility.MessageEnglish } else { $script:backendCompatibility.Message }
+    $compatibilityCaption = if ((Get-KVMemUiLanguage) -eq 'en') { 'No matching KVMem GGUF backend' } else { '没有匹配的 KVMem GGUF 后端' }
+    [void](Show-LocalizedMessage $compatibilityMessage $compatibilityCaption 'OK' 'Error')
+    exit 2
+}
 $logsPath = Join-Path $root 'codex\logs'
 $script:models = @()
 $script:scanTask = $null
@@ -186,13 +213,47 @@ function Add-Choice($Table,[string]$Text,[string[]]$Items,[string]$Selected) {
     Add-Parameter $Table $Text $c
     return $c
 }
+function Apply-UiLanguage {
+    $language=Get-KVMemUiLanguage
+    $languageChanged=$script:lastAppliedLanguage -ne $language
+    $pending=[Collections.Generic.Stack[Windows.Forms.Control]]::new()
+    $pending.Push($form)
+    while($pending.Count){
+        $control=$pending.Pop()
+        if($control -ne $languageButton -and !($control -is [Windows.Forms.TextBox])){
+            $newText=Get-KVMemUiText $control.Text
+            if($newText -cne $control.Text){$control.Text=$newText}
+            $tip=$tips.GetToolTip($control)
+            if($tip){$newTip=Get-KVMemUiText $tip;if($newTip -cne $tip){$tips.SetToolTip($control,$newTip)}}
+        }
+        if($languageChanged -and $control -is [Windows.Forms.ComboBox] -and $control -ne $modelBox -and !$control.DisplayMember){
+            $selected=$control.SelectedIndex;$items=@();foreach($item in $control.Items){$items+=Get-KVMemUiText ([string]$item)}
+            $control.BeginUpdate();$control.Items.Clear();[void]$control.Items.AddRange([object[]]$items)
+            if($selected -ge 0 -and $selected -lt $control.Items.Count){$control.SelectedIndex=$selected};$control.EndUpdate()
+        }
+        foreach($child in $control.Controls){$pending.Push($child)}
+        if($control -is [Windows.Forms.TabControl]){foreach($page in $control.TabPages){$pending.Push($page)}}
+    }
+    $formText=Get-KVMemUiText $form.Text;if($formText -cne $form.Text){$form.Text=$formText}
+    if($hint){
+        $hintText=if($language -eq 'en'){"SillyTavern API: http://127.0.0.1:18200/v1    Model: kvmem-current`r`nGPU backend: $($script:backendCompatibility.SummaryEnglish)"}else{"酒馆 API：http://127.0.0.1:18200/v1    模型：kvmem-current`r`nGPU 后端：$($script:backendCompatibility.Summary)"}
+        if($hint.Text -cne $hintText){$hint.Text=$hintText}
+    }
+    $languageButton.Text=if($language -eq 'en'){'中文'}else{'English'}
+    $script:lastAppliedLanguage=$language
+}
 $layout=[Windows.Forms.TableLayoutPanel]::new();$layout.Dock='Fill';$layout.Padding=[Windows.Forms.Padding]::new(16)
 $layout.ColumnCount=1;$layout.RowCount=8
 [void]$layout.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::Percent,100))
 foreach($i in 0..7){$type=if($i -eq 3){[Windows.Forms.SizeType]::Percent}else{[Windows.Forms.SizeType]::AutoSize};[void]$layout.RowStyles.Add([Windows.Forms.RowStyle]::new($type,100))}
 $form.Controls.Add($layout)
+$header=[Windows.Forms.TableLayoutPanel]::new();$header.Dock='Fill';$header.ColumnCount=2;$header.RowCount=1
+[void]$header.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::Percent,100))
+[void]$header.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::AutoSize))
 $title=New-UiLabel 'KVMem 模型控制台';$title.Font=[Drawing.Font]::new('Microsoft YaHei UI',17,[Drawing.FontStyle]::Bold)
-$layout.Controls.Add($title,0,0)
+$header.Controls.Add($title,0,0)
+$languageButton=New-UiButton 'English';$header.Controls.Add($languageButton,1,0)
+$layout.Controls.Add($header,0,0)
 $status=New-UiLabel '状态：正在检查服务…';$status.Dock='Fill';$layout.Controls.Add($status,0,1)
 $modelTable=[Windows.Forms.TableLayoutPanel]::new();$modelTable.Dock='Fill';$modelTable.AutoSize=$true
 $modelTable.ColumnCount=3;$modelTable.RowCount=0
@@ -242,7 +303,8 @@ $presenceControl=Add-Numeric $samplingTable '存在惩罚（Presence penalty）'
 $frequencyControl=Add-Numeric $samplingTable '频率惩罚（Frequency penalty）' -2 2 0 2 0.05
 $seedControl=Add-Numeric $samplingTable '随机种子（-1 = 随机）' -1 4294967295 -1
 $thinkingControl=Add-Choice $samplingTable '思考模式' @('禁用思考','模型默认') '禁用思考'
-$hint=New-UiLabel "酒馆 API：http://127.0.0.1:18200/v1    模型：kvmem-current"
+$hintText=if((Get-KVMemUiLanguage) -eq 'en'){"SillyTavern API: http://127.0.0.1:18200/v1    Model: kvmem-current`r`nGPU backend: $($script:backendCompatibility.SummaryEnglish)"}else{"酒馆 API：http://127.0.0.1:18200/v1    模型：kvmem-current`r`nGPU 后端：$($script:backendCompatibility.Summary)"}
+$hint=New-UiLabel $hintText
 $hint.ForeColor=[Drawing.Color]::FromArgb(45,86,140);$layout.Controls.Add($hint,0,4)
 $actions=[Windows.Forms.FlowLayoutPanel]::new();$actions.AutoSize=$true;$actions.Dock='Fill';$actions.WrapContents=$true
 $action=New-UiButton '启动 / 切换模型';$action.BackColor=[Drawing.Color]::FromArgb(34,116,220);$action.ForeColor=[Drawing.Color]::White
@@ -259,6 +321,7 @@ $form.add_Resize({
 })
 
 function Write-UiFeedback([string]$Message) {
+    $Message=Get-KVMemUiText $Message
     $feedback.AppendText("[$(Get-Date -Format HH:mm:ss)] $Message`r`n")
 }
 function Invoke-UiAction([scriptblock]$Work) {
@@ -268,7 +331,7 @@ function Invoke-UiAction([scriptblock]$Work) {
         Write-UiFeedback "操作失败：$message"
         New-Item -ItemType Directory -Force -Path $logsPath|Out-Null
         Add-Content -LiteralPath (Join-Path $logsPath 'controller-errors.log') -Value "$(Get-Date -Format o) $($_ | Out-String)"
-        [void][Windows.Forms.MessageBox]::Show($form,$message,'KVMem 操作失败','OK','Error')
+        [void](Show-LocalizedMessage $message 'KVMem 操作失败' 'OK' 'Error')
     }
 }
 
@@ -318,7 +381,7 @@ function Update-Status {
 }
 function Quote-PsLiteral([string]$Value) { "'" + $Value.Replace("'","''") + "'" }
 function Start-ControllerOperation([string]$Body,[string]$Label) {
-    if($script:operationProcess -and !$script:operationProcess.HasExited){[void][Windows.Forms.MessageBox]::Show('已有启动或停止操作正在执行。','KVMem','OK','Information');return}
+    if($script:operationProcess -and !$script:operationProcess.HasExited){[void](Show-LocalizedMessage '已有启动或停止操作正在执行。' 'KVMem' 'OK' 'Information');return}
     New-Item -ItemType Directory -Force -Path $logsPath|Out-Null
     $stamp=Get-Date -Format 'yyyyMMdd-HHmmss-fff'
     $taskFile=Join-Path $logsPath "controller-operation-$stamp.ps1"
@@ -352,7 +415,7 @@ function Render-Models {
 }
 function Start-ModelScan {
     if($script:scanTask -and !$script:scanTask.IsCompleted){Write-UiFeedback '正在扫描模型，请稍候。';return}
-    $scanRoot=$rootBox.Text.Trim();if(!(Test-Path -LiteralPath $scanRoot -PathType Container)){[void][Windows.Forms.MessageBox]::Show("找不到目录：`n$scanRoot",'KVMem','OK','Warning');return}
+    $scanRoot=$rootBox.Text.Trim();if(!(Test-Path -LiteralPath $scanRoot -PathType Container)){[void](Show-LocalizedMessage "找不到目录：`n$scanRoot" 'KVMem' 'OK' 'Warning');return}
     $scanButton.Enabled=$false;$status.Text='状态：正在扫描 GGUF 模型…'
     $script:scanTask=[KVMemModelScanner]::ScanAsync($scanRoot)
 }
@@ -360,7 +423,7 @@ function Start-ModelScan {
 function Complete-ModelScan {
     if(!$script:scanTask -or !$script:scanTask.IsCompleted){return}
     $scanTask=$script:scanTask;$script:scanTask=$null;$scanButton.Enabled=$true
-    if($scanTask.IsFaulted){$status.Text='状态：扫描失败';[void][Windows.Forms.MessageBox]::Show($scanTask.Exception.GetBaseException().Message,'模型扫描失败','OK','Error');return}
+    if($scanTask.IsFaulted){$status.Text='状态：扫描失败';[void](Show-LocalizedMessage $scanTask.Exception.GetBaseException().Message '模型扫描失败' 'OK' 'Error');return}
     $script:models=@($scanTask.Result|ForEach-Object{$f=[IO.FileInfo]::new($_);[pscustomobject]@{Label="$($f.BaseName) · $([math]::Round($f.Length/1GB,2)) GiB";Path=$f.FullName}})
     Render-Models;Write-UiFeedback "扫描完成：找到 $($script:models.Count) 个 GGUF 模型。"
 }
@@ -390,24 +453,24 @@ $mmButton.add_Click({Invoke-UiAction {$d=[Windows.Forms.OpenFileDialog]::new();t
 
 $action.add_Click({Invoke-UiAction {
     $model=$modelPath.Text.Trim()
-    if(!(Test-Path -LiteralPath $model -PathType Leaf) -or [IO.Path]::GetExtension($model) -ne '.gguf'){[void][Windows.Forms.MessageBox]::Show('请先选择一个存在的 GGUF 文件。','KVMem','OK','Warning');return}
-    if($autoGpuCheck.Checked -and ($script:layerPath -ne $model -or $script:modelLayerCount -lt 1)){[void][Windows.Forms.MessageBox]::Show('正在读取该 GGUF 的层数，或元数据无法识别。请稍候，或取消自动并手动设置 GPU 层数。','KVMem','OK','Warning');return}
-    $mm=$mmPath.Text.Trim();if($mm -and !(Test-Path -LiteralPath $mm -PathType Leaf)){[void][Windows.Forms.MessageBox]::Show("找不到 mmproj：`n$mm",'KVMem','OK','Warning');return}
+    if(!(Test-Path -LiteralPath $model -PathType Leaf) -or [IO.Path]::GetExtension($model) -ne '.gguf'){[void](Show-LocalizedMessage '请先选择一个存在的 GGUF 文件。' 'KVMem' 'OK' 'Warning');return}
+    if($autoGpuCheck.Checked -and ($script:layerPath -ne $model -or $script:modelLayerCount -lt 1)){[void](Show-LocalizedMessage '正在读取该 GGUF 的层数，或元数据无法识别。请稍候，或取消自动并手动设置 GPU 层数。' 'KVMem' 'OK' 'Warning');return}
+    $mm=$mmPath.Text.Trim();if($mm -and !(Test-Path -LiteralPath $mm -PathType Leaf)){[void](Show-LocalizedMessage "找不到 mmproj：`n$mm" 'KVMem' 'OK' 'Warning');return}
     $listener=Get-NetTCPConnection -State Listen -LocalPort 18200 -ErrorAction SilentlyContinue|Select-Object -First 1
     $body="`$ErrorActionPreference='Stop'`r`n"
     if($listener){$owner=Get-CimInstance Win32_Process -Filter "ProcessId = $($listener.OwningProcess)" -ErrorAction SilentlyContinue
-        if(!$owner -or ![string]::Equals($owner.ExecutablePath,$serverPath,[StringComparison]::OrdinalIgnoreCase)){[void][Windows.Forms.MessageBox]::Show("18200 端口由其他程序使用（PID $($listener.OwningProcess)），未做更改。",'端口冲突','OK','Warning');return}
-        if([Windows.Forms.MessageBox]::Show('当前模型将停止并切换到所选模型。继续？','切换模型','YesNo','Question') -ne 'Yes'){return}
+        if(!$owner -or ![string]::Equals($owner.ExecutablePath,$serverPath,[StringComparison]::OrdinalIgnoreCase)){[void](Show-LocalizedMessage "18200 端口由其他程序使用（PID $($listener.OwningProcess)），未做更改。" '端口冲突' 'OK' 'Warning');return}
+        if((Show-LocalizedMessage '当前模型将停止并切换到所选模型。继续？' '切换模型' 'YesNo' 'Question') -ne 'Yes'){return}
         $body+="& $(Quote-PsLiteral $stopScript)`r`n`$until=(Get-Date).AddSeconds(30)`r`nwhile((Get-Date) -lt `$until -and (Get-NetTCPConnection -State Listen -LocalPort 18200 -ErrorAction SilentlyContinue)){Start-Sleep -Milliseconds 250}`r`nif(Get-NetTCPConnection -State Listen -LocalPort 18200 -ErrorAction SilentlyContinue){throw '旧服务未释放 18200 端口'}`r`n"
     }
     $gpuLayers=if($autoGpuCheck.Checked){$script:modelLayerCount}else{[int]$gpuLayerControl.Value}
     $inv=[Globalization.CultureInfo]::InvariantCulture
-    $disableThinking=if($thinkingControl.SelectedItem -eq '禁用思考'){'$true'}else{'$false'}
+    $disableThinking=if($thinkingControl.SelectedIndex -eq 0){'$true'}else{'$false'}
     $body+="& $(Quote-PsLiteral $startScript) -Model $(Quote-PsLiteral $model) -ModelAlias 'kvmem-current' -Context $([int]$contextControl.Value) -GpuLayers $gpuLayers -KvmemBudget $([int]$budgetControl.Value) -GenerationReserve $([int]$reserveControl.Value) -CpuMemoryGiB $([int]$cpuArenaControl.Value) -BatchSize $([int]$batchControl.Value) -UBatchSize $([int]$ubatchControl.Value) -Threads $([int]$threadsControl.Value) -ThreadsBatch $([int]$threadsBatchControl.Value) -KvDtype '$($kvTypeControl.SelectedItem)' -FlashAttention '$($flashControl.SelectedItem)' -LoadMode '$($loadModeControl.SelectedItem)' -MaxTokens $([int]$maxTokensControl.Value) -Temperature $($temperatureControl.Value.ToString($inv)) -TopP $($topPControl.Value.ToString($inv)) -TopK $([int]$topKControl.Value) -MinP $($minPControl.Value.ToString($inv)) -RepeatPenalty $($repeatControl.Value.ToString($inv)) -PresencePenalty $($presenceControl.Value.ToString($inv)) -FrequencyPenalty $($frequencyControl.Value.ToString($inv)) -Seed $([long]$seedControl.Value) -DisableThinking:$disableThinking"
     if($mm){$body+=" -Mmproj $(Quote-PsLiteral $mm)"}
     Start-ControllerOperation $body "正在加载 $([IO.Path]::GetFileName($model))"
 }})
-$stopButton.add_Click({Invoke-UiAction {$l=Get-NetTCPConnection -State Listen -LocalPort 18200 -ErrorAction SilentlyContinue|Select-Object -First 1;if(!$l){$status.Text='状态：KVMem 已停止';Write-UiFeedback 'KVMem 当前没有运行，无需停止。';return};$o=Get-CimInstance Win32_Process -Filter "ProcessId = $($l.OwningProcess)" -ErrorAction SilentlyContinue;if(!$o -or ![string]::Equals($o.ExecutablePath,$serverPath,[StringComparison]::OrdinalIgnoreCase)){[void][Windows.Forms.MessageBox]::Show("18200 端口属于其他程序（PID $($l.OwningProcess)），已取消。",'KVMem','OK','Warning');return};Start-ControllerOperation "& $(Quote-PsLiteral $stopScript)" '正在停止 KVMem'}})
+$stopButton.add_Click({Invoke-UiAction {$l=Get-NetTCPConnection -State Listen -LocalPort 18200 -ErrorAction SilentlyContinue|Select-Object -First 1;if(!$l){$status.Text='状态：KVMem 已停止';Write-UiFeedback 'KVMem 当前没有运行，无需停止。';return};$o=Get-CimInstance Win32_Process -Filter "ProcessId = $($l.OwningProcess)" -ErrorAction SilentlyContinue;if(!$o -or ![string]::Equals($o.ExecutablePath,$serverPath,[StringComparison]::OrdinalIgnoreCase)){[void](Show-LocalizedMessage "18200 端口属于其他程序（PID $($l.OwningProcess)），已取消。" 'KVMem' 'OK' 'Warning');return};Start-ControllerOperation "& $(Quote-PsLiteral $stopScript)" '正在停止 KVMem'}})
 $webButton.add_Click({Invoke-UiAction {
     if(![Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().GetActiveTcpListeners().Where({$_.Port -eq 18200}).Count){Write-UiFeedback '请先启动模型；模型加载完成后才能打开 KVMem 页面。';return}
     $info=[Diagnostics.ProcessStartInfo]::new('http://127.0.0.1:18200/');$info.UseShellExecute=$true;[void][Diagnostics.Process]::Start($info)
@@ -417,7 +480,14 @@ $copyButton.add_Click({Invoke-UiAction {[Windows.Forms.Clipboard]::SetText('http
 $mmClearButton.add_Click({$mmPath.Clear();Write-UiFeedback '已清除视觉投影文件。'})
 $modelPath.add_TextChanged({$tips.SetToolTip($modelPath,$modelPath.Text)})
 $mmPath.add_TextChanged({$tips.SetToolTip($mmPath,$mmPath.Text)})
-$timer=[Windows.Forms.Timer]::new();$timer.Interval=500;$timer.add_Tick({Invoke-UiAction {Update-Status;Complete-ModelScan;Complete-LayerScan;Update-Operation}})
+$languageButton.add_Click({Invoke-UiAction {
+    $next=if((Get-KVMemUiLanguage) -eq 'en'){'zh'}else{'en'}
+    Set-KVMemUiLanguage -Language $next
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $languageFile)|Out-Null
+    [IO.File]::WriteAllText($languageFile,(ConvertTo-Json @{Language=$next} -Compress),[Text.UTF8Encoding]::new($false))
+    Apply-UiLanguage
+}})
+$timer=[Windows.Forms.Timer]::new();$timer.Interval=500;$timer.add_Tick({Invoke-UiAction {Update-Status;Complete-ModelScan;Complete-LayerScan;Update-Operation;Apply-UiLanguage}})
 $form.add_Shown({$form.WindowState=[Windows.Forms.FormWindowState]::Normal;$form.Activate();$form.BringToFront();$status.Text='状态：正在检查 KVMem…';Start-ModelScan;$timer.Start()})
 $form.add_FormClosing({$timer.Stop()})
 Add-Type -TypeDefinition @'
@@ -430,4 +500,5 @@ public static class KVMemConsoleWindow {
 }
 '@
 [KVMemConsoleWindow]::Hide()
+Apply-UiLanguage
 [void][Windows.Forms.Application]::Run($form)

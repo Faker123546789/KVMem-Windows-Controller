@@ -8,6 +8,8 @@ This is an independent community launcher. It does not modify LM Studio or repla
 
 For the portable, ready-to-run package, download the Windows x64 ZIP from the repository's **Releases** page, extract it, and double-click `Open-KVMem-Controller.bat`. The first launch verifies and unpacks its bundled KVMem runtime and portable PowerShell into the extracted folder. No administrator access is required. Keep the extracted folder together after setup.
 
+Use the **English / 中文** button in the window header to switch languages. The selection is saved locally for the next launch.
+
 Place GGUF files in the `models` folder to have them discovered automatically, or use **Browse GGUF** to select a model elsewhere. Model weights are intentionally not included in this repository or the portable package. Use only English characters in the path to the extracted package and any model you select.
 
 ## Requirements
@@ -44,9 +46,21 @@ The server binds to the loopback interface. This address is a generic local-only
 
 ## Runtime and backend compatibility
 
-This controller requires the **llama.cpp/GGUF** backend. Its portable package uses the upstream Windows x64 CUDA 13.2.86 runtime from [KVMem v0.16.0-rc3](https://github.com/kvmem/kvmem/releases/tag/v0.16.0-rc3), which includes the RTX 40 series `sm_89` target. The archive SHA-256 is `76e450bd9f84a43f61a2c2a1c742dc8b98a43f39b12f7e79cfa2043e5e456bec`.
+This controller requires the **llama.cpp/GGUF** backend. Its portable package uses the upstream Windows x64 CUDA 13.2.86 runtime from [KVMem v0.16.0-rc3](https://github.com/kvmem/kvmem/releases/tag/v0.16.0-rc3). The archive SHA-256 is `76e450bd9f84a43f61a2c2a1c742dc8b98a43f39b12f7e79cfa2043e5e456bec`.
 
-Do not substitute the Windows v0.18 NInfer package: it is a different backend and does not provide this llama.cpp server. Check the [upstream release page](https://github.com/kvmem/kvm/releases) for current backend and package notes. The upstream project supplies and licenses its runtime separately; third-party notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+As checked on 2026-10-19, KVMem's Windows v0.18.0 stable package for RTX 30/40/50 is NInfer-only, not GGUF. KVMem also publishes a separate llama.cpp/GGUF v0.18.0 RC for RTX 20/V100; this controller stays on its pinned v0.16.0-rc3 runtime so its arguments and bundle remain consistent. Do not substitute an NInfer package for this llama.cpp server. Check the [upstream release page](https://github.com/kvmem/kvmem/releases) for newer compatible runtimes. The upstream project supplies and licenses its runtime separately; third-party notices are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+On each controller launch, the bundled KVMem server enumerates CUDA devices and reports their compute capability. The controller compares that result with this exact runtime's compiled targets before allowing a model to start; `-Gpu auto` chooses the first compatible CUDA device. The bundled CUDA 13.2.86 build lists targets `sm_75`, `sm_80`, `sm_86`, `sm_89`, `sm_90`, and `sm_120a`:
+
+| NVIDIA generation | Typical target | Bundled GGUF backend |
+|---|---:|---|
+| RTX 10 series (Pascal) | `sm_61` | Not included; startup is blocked with an explanation |
+| RTX 20 series (Turing) | `sm_75` | Included |
+| RTX 30 series (Ampere) | `sm_86` | Included |
+| RTX 40 series (Ada) | `sm_89` | Included |
+| RTX 50 series (Blackwell) | `sm_120a` | Included |
+
+These are build-architecture targets, not a guarantee that every model fits available VRAM or has been inference-tested on every card. The launch check also initializes the bundled CUDA runtime, so a driver/runtime incompatibility is reported before the GUI continues. KVMem's release notes record driver 610.62 as tested but do not establish a minimum supported driver; the controller does not guess one. The check is local and does not send GPU or machine information to a server.
 
 ## Run from source
 

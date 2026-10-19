@@ -4,7 +4,7 @@ param(
     [string]$Model = '',
     [string]$Mmproj = '',
     [string]$ModelAlias = 'kvmem-current',
-    [string]$Gpu = '0',
+    [string]$Gpu = 'auto',
     [int]$Port = 18200,
     [int]$Context = 32768,
     [int]$GpuLayers = 99,
@@ -31,12 +31,36 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
+$localizationModule = Join-Path $root 'KVMem-Localization.psm1'
+if (!(Test-Path -LiteralPath $localizationModule -PathType Leaf)) { throw 'KVMem language resources are missing; re-extract the complete package.' }
+Import-Module $localizationModule -Force
+$languageFile = Join-Path $root 'codex\ui-language.json'
+if (Test-Path -LiteralPath $languageFile -PathType Leaf) {
+    try { $savedLanguage=(Get-Content -LiteralPath $languageFile -Raw|ConvertFrom-Json).Language; if($savedLanguage -in @('zh','en')){Set-KVMemUiLanguage -Language $savedLanguage} } catch {}
+}
+$compatibilityModule = Join-Path $root 'KVMem-Compatibility.psm1'
+if (!(Test-Path -LiteralPath $compatibilityModule -PathType Leaf)) { throw 'KVMem GPU compatibility checker is missing; re-extract the complete package.' }
+Import-Module $compatibilityModule -Force
 $runtime = Join-Path $root 'runtime'
 $server = Join-Path $runtime 'bin\llama-kvmem-server.exe'
 $ui = Join-Path $runtime 'share\kvmem\ui'
 $logs = Join-Path $root 'codex\logs'
 $pidFile = Join-Path $root 'codex\server.pid'
 if (!(Test-Path -LiteralPath $server)) { throw "KVMem server not found: $server" }
+if ($Gpu -eq 'auto') {
+    $compatibility = Get-KVMemBackendCompatibility -ServerPath $server
+    if (!$compatibility.Supported) { throw $(if((Get-KVMemUiLanguage) -eq 'en'){$compatibility.MessageEnglish}else{$compatibility.Message}) }
+    $Gpu = [string]$compatibility.RecommendedGpuIndex
+} else {
+    $compatibility = Get-KVMemBackendCompatibility -ServerPath $server
+    if (!$compatibility.Supported) { throw $(if((Get-KVMemUiLanguage) -eq 'en'){$compatibility.MessageEnglish}else{$compatibility.Message}) }
+    if ($Gpu -notmatch '^\d+$') { throw "GPU must be 'auto' or a CUDA device index. Detected usable devices: $(($compatibility.Devices | Where-Object Supported | ForEach-Object { "$($_.Index): $($_.Name) ($($_.Target))" }) -join ', ')" }
+    $selectedDevice = $compatibility.Devices | Where-Object Index -eq ([int]$Gpu) | Select-Object -First 1
+    if (!$selectedDevice -or !$selectedDevice.Supported) {
+        if((Get-KVMemUiLanguage) -eq 'en'){throw "CUDA device index $Gpu has no compatible target in this KVMem build. Supported targets: $($compatibility.Targets -join ', ')."}
+        throw "CUDA 设备编号 $Gpu 在当前 KVMem 版本中没有兼容的计算目标。支持目标：$($compatibility.Targets -join ', ')。"
+    }
+}
 if ([string]::IsNullOrWhiteSpace($Model)) { throw 'Select a local GGUF model with -Model.' }
 if (!(Test-Path -LiteralPath $Model)) { throw "GGUF model not found: $Model" }
 if ($Mmproj -and !(Test-Path -LiteralPath $Mmproj)) { throw "mmproj not found: $Mmproj" }
