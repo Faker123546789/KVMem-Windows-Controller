@@ -30,3 +30,6 @@ Desktop.ini
 
 /payloads/
 /.tools/
+
+# Local build output
+/dist/

@@ -45,12 +45,12 @@ KVMem 通过 `llama-kvmem-server.exe` 提供 OpenAI 兼容接口，但日常使�
 
 ### 方式一：便携包
 
-> 仓库**不包含** KVMem 后端运行时（约 700 MB）和模型文件，需要单独准备。如果你拿到的是别人打包好的便携包，按下面步骤操作。
+> 从 [Releases](https://github.com/Faker123546789/KVMem-Windows-Controller/releases/latest) 下载 `KVMem-Windows-Controller-Portable-v*.zip`（约 785 MB，已内含 KVMem 后端与 PowerShell 7，不含模型）。
 
 1. 解压到**纯英文路径**，例如 `D:\KVMem`。中文路径可能让后端加载失败。
 2. 把 `.gguf` 模型放进 `models` 文件夹（也可以放在任意位置，之后在界面里选）。
 3. 双击 `Open-KVMem-Controller.bat`。
-   - 如果缺少运行时，`Bootstrap-Portable.ps1` 会自动解压 `payloads` 里的 KVMem 后端和 PowerShell 7。
+   - 首次启动会自动校验并解压 `payloads` 里的两个压缩包，生成 `runtime\` 与 `.tools\pwsh\`（约 1.8 GB，需要等一会儿）。
 4. 在界面里选模型 → 调参数 → 点 **启动 / 切换模型**。
 5. 状态变成 `运行中` 后，把酒馆地址 `http://127.0.0.1:18200/v1` 填进 SillyTavern 或任意 OpenAI 兼容客户端。
 
@@ -190,6 +190,23 @@ if ($e) { $e } else { 'parse OK' }
 ```
 
 日志、进程号、模型文件都在 `.gitignore` 里，不会被提交。
+
+### 构建便携包
+
+`payloads` 目录不随仓库分发，需要先把两个上游压缩包放进去（文件名必须一致）：
+
+| 文件 | 来源 |
+|---|---|
+| `kvmem-v0.16.0-rc3-windows-x86_64-cuda13.2.86.zip` | [KVMem releases](https://github.com/kvmem/kvmem/releases/tag/v0.16.0-rc3) |
+| `PowerShell-7.6.7-win-x64.zip` | [PowerShell releases](https://github.com/PowerShell/PowerShell/releases/tag/v7.6.7) |
+
+然后执行：
+
+```powershell
+pwsh -File .\Build-Portable.ps1
+```
+
+脚本会复制源代码与两个 payload、打成 `dist\KVMem-Windows-Controller-Portable-v<版本>.zip`，并校验必需条目齐全、没有混入日志或模型。版本号取自 `package-manifest.json`。
 
 ---
 
