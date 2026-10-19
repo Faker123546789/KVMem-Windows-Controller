@@ -1,6 +1,6 @@
 {
   "Package": "KVMem Windows Controller Portable",
-  "Version": "0.1.0",
+  "Version": "0.2.0",
   "Backend": "KVMem llama.cpp/GGUF v0.16.0-rc3 Windows x64 CUDA 13.2.86",
   "BackendArchiveSha256": "76e450bd9f84a43f61a2c2a1c742dc8b98a43f39b12f7e79cfa2043e5e456bec",
   "PowerShell": "7.6.7 Windows x64 portable",
