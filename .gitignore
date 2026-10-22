@@ -13,7 +13,6 @@
 # Secrets, local settings and key material
 .env
 .env.*
-!.env.example
 *.key
 *.pem
 *.pfx
@@ -33,3 +32,11 @@ Desktop.ini
 
 # Local build output
 /dist/
+
+# v0.18 local runtime, weights, conversion tools and private state
+*.ninfer
+/v0.18/models/
+/v0.18/workers/
+/v0.18/converter/
+/v0.18/codex/
+/v0.18/payloads/
