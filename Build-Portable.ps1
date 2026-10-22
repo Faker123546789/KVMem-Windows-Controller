@@ -52,7 +52,6 @@ $files = @(
     '.gitignore'
     '.gitattributes'
     'assets\kvmem.ico'
-    'docs\ui-preview.png'
 )
 
 $payloads = @(

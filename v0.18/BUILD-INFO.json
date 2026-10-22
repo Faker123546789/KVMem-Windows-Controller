@@ -1,0 +1,75 @@
+{
+  "runtime_validation": {
+    "clean_path_help_passed": true,
+    "cuda_architecture_verified": true,
+    "powershell_51_default_launch_dryrun_passed": true,
+    "actual_gpu_inference_validated": false,
+    "runtime_evidence_basis": "RC3 engine binaries and evidence retained. Launcher defaults updated to sink=12288/recent=1024; PowerShell 5.1, package hashes and updated-default runtime checks recorded separately. No new performance measurement.",
+    "inference_performance_measured_this_release": false
+  },
+  "backend_sources": {
+    "layout": "git-submodules-with-patches",
+    "ninfer": {
+      "path": "backends/ninfer",
+      "upstream": "https://github.com/iamwavecut/ninfer-all.git",
+      "base_commit": "8319e8f512477d0cfdef89e16c17c1ba9f9bc7b3",
+      "license_file": "backends/ninfer/LICENSE",
+      "local_changes": "KVMem integration is maintained in the versioned patch; the submodule remains pinned to base_commit",
+      "patch": "backends/patches/ninfer-kvmem.patch",
+      "patch_sha256": "84d173228793853d889881f41ccf4d21b6cd899e81f612841cc5e149240119c4",
+      "patched_tree": "cdcc146ff28e07092c12d2a8f590b9ba7fa8f421"
+    }
+  },
+  "workers": {
+    "ninfer": {
+      "clean_path_help_passed": true,
+      "sha256": "d6887e36cfc932c836905979ad0036b3a415f80d925cf2d3c852c934a7716370",
+      "path": "workers/ninfer/ninfer-kvmem-server.exe"
+    }
+  },
+  "kv_cross_backend_transfer": false,
+  "models_included": false,
+  "source_commit": "ea476bac448e17fb50a8b694cd65cde949eaca9b",
+  "source_branch": "release/0.18.0",
+  "package_backend": "ninfer",
+  "rtx_series": "40",
+  "ninfer_architecture": "89",
+  "ninfer_sm120_native": false,
+  "cuda_version": "13.2.86",
+  "compiler": "MSVC 19.44.35222 (VS 2022 v143)",
+  "entrypoint": "scripts/windows/start-ninfer.ps1",
+  "package_startup_defaults": {
+    "Gpu": "0",
+    "Context": 204800,
+    "Budget": 36864,
+    "Reserve": 16384,
+    "HostMiB": 12288,
+    "Prefill": 256,
+    "MaxTokens": 16384,
+    "KvType": "int8",
+    "MtpDrafts": 4,
+    "AdaptiveMtp": true,
+    "NgramDrafts": 31,
+    "NgramMinMatch": 12,
+    "Concurrency": 1,
+    "RetainedSessions": 1,
+    "Vision": true,
+    "VisionResidency": "cpu",
+    "VisionTokens": 1024,
+    "DeviceProfile": "off",
+    "ThinkingBudget": 8192,
+    "SinkTokens": 12288,
+    "RecentTokens": 1024,
+    "LrfuLambda": 0.5,
+    "LrfuTopFraction": 0.9,
+    "ScoreAggregation": "max",
+    "Lrfu": true,
+    "DiskPath": null
+  },
+  "binary_source_commit": "938c2f1968b0283e7d7dd143918a9f3ff866dd4d",
+  "release_version": "0.18.0",
+  "release_tag": "v0.18.0",
+  "prerelease": false,
+  "launcher_source_commit": "fd776139e62742fbcf7d03b08730c33db8f3cea0",
+  "startup_defaults_revision": "2026-10-13-sink12k-recent1k"
+}

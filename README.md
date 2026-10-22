@@ -1,233 +1,139 @@
-# KVMem 可视化后端 · Windows 桌面控制器
+# KVMem Windows Controller / KVMem Windows 控制器
 
-> **KVMem Visual Backend** — 给 [KVMem](https://github.com/kvmem/kvmem) 本地推理服务套一个 Windows 图形界面，负责选模型、配参数、启停服务、看日志。
->
-> 本项目是**第三方社区前端**，不是 KVMem 官方项目，也不修改上游代码。
+[简体中文](#简体中文) | [English](#english)
 
-**上游项目：<https://github.com/kvmem/kvmem>**
-> KVMem virtualizes KV memory across inference backends to make ultra-long-context local AI accessible on limited hardware.
+## 简体中文
 
-![界面预览](docs/ui-preview.png)
+这是一个面向 [KVMem](https://github.com/kvmem/kvmem) 本地推理后端的 Windows 控制器仓库。仓库保留现有的可视化控制器，并在此基础上提供 **KVMem v0.18 NInfer 控制器源码和参数说明**。
 
----
+> 本项目是独立的第三方社区前端，不是 KVMem 官方仓库，也不代表 KVMem 上游作者。推理引擎、模型格式和上游许可证归各自作者所有。
 
-## 这个项目解决什么问题
+### v0.18 包含什么
 
-KVMem 通过 `llama-kvmem-server.exe` 提供 OpenAI 兼容接口，但日常使用要背一堆命令行参数：上下文长度、KV 缓存预算、GPU 卸载层数、批大小、采样参数……换一个模型就要重新拼一遍。
+- WinForms 控制器：扫描 `.ninfer` 模型、配置 KV 预算、视觉、MTP 和采样参数。
+- PowerShell 启动与停止入口，默认仅监听 `127.0.0.1`。
+- 可自定义上下文、显存预算和视觉设置。
+- 中英双语的安装、配置、隐私和故障排查说明。
 
-这个控制器把这些参数做成一个单窗口面板：
+### 不包含什么
 
-- 自动扫描本地 GGUF，读出模型层数，自动决定 GPU 卸载层数
-- 三个参数页签，**全部参数一屏可见**，不用滚动
-- 一键启动 / 停止 / 切换模型，实时显示服务状态
-- 中英文一键切换，选择会保存
-- 内置运行日志查看器，出错能直接定位
+本仓库**不包含模型权重、NInfer/llama.cpp 运行时、转换器二进制、Python 环境、日志、聊天记录、世界书、API 密钥或用户配置**。请从上游发布页获取与显卡架构匹配的 v0.18 运行包，并将 `.ninfer` 模型放在纯英文路径。模型和运行时体积大、许可独立，因此没有放进 Git 历史。
 
-它只做"调度和界面"，真正的推理仍然由上游 KVMem 的 llama.cpp 后端完成。
+### 快速开始
 
----
-
-## 功能一览
-
-| 模块 | 说明 |
-|---|---|
-| 模型管理 | 扫描目录、按名称筛选、单独浏览某个 GGUF、可选 `mmproj` 视觉投影 |
-| 显存与加载 | 自动/手动 GPU 卸载层数、Flash Attention、模型加载方式、CPU 线程、逻辑/物理批大小 |
-| 上下文与 KV 缓存 | 上下文长度、KVMem GPU 缓存预算、CPU 缓存大小、KV 精度、生成预留 |
-| 生成与采样 | 最大生成长度、温度、Top-P、Top-K、Min-P、重复/存在/频率惩罚、随机种子、思考模式 |
-| 服务控制 | 启动/切换、停止、打开 KVMem 网页、复制酒馆地址 |
-| 诊断 | 状态卡片（五档配色 + 忙碌进度条）、深色活动日志、日志查看器、GPU 兼容性检查 |
-| 界面 | 中英双语、DPI 自适应、快捷键 `Ctrl+Enter` 启动、`F5` 刷新 |
-
----
-
-## 使用说明
-
-### 方式一：便携包
-
-> 从 [Releases](https://github.com/Faker123546789/KVMem-Windows-Controller/releases/latest) 下载 `KVMem-Windows-Controller-Portable-v*.zip`（约 785 MB，已内含 KVMem 后端与 PowerShell 7，不含模型）。
-
-1. 解压到**纯英文路径**，例如 `D:\KVMem`。中文路径可能让后端加载失败。
-2. 把 `.gguf` 模型放进 `models` 文件夹（也可以放在任意位置，之后在界面里选）。
-3. 双击 `Open-KVMem-Controller.bat`。
-   - 首次启动会自动校验并解压 `payloads` 里的两个压缩包，生成 `runtime\` 与 `.tools\pwsh\`（约 1.8 GB，需要等一会儿）。
-4. 在界面里选模型 → 调参数 → 点 **启动 / 切换模型**。
-5. 状态变成 `运行中` 后，把酒馆地址 `http://127.0.0.1:18200/v1` 填进 SillyTavern 或任意 OpenAI 兼容客户端。
-
-停止服务用界面上的 **停止 KVMem**，或命令行执行 `pwsh -File .\Stop-KVMem.ps1`。
-
-### 方式二：从源码运行（推荐给开发者）
+1. 安装 PowerShell 7 和兼容 CUDA 13.2 的 NVIDIA 驱动。
+2. 准备与 GPU 架构匹配的 `workers/ninfer/ninfer-kvmem-server.exe` 及 `.ninfer` 模型。
+3. 在面板中选择自己的模型并设置显存预算，或通过命令行传入参数。
+4. 检查参数，不启动服务：
 
 ```powershell
-# 1. 需要 PowerShell 7
-pwsh -v
-
-# 2. 准备 KVMem 运行时，目录结构必须是：
-#    runtime\bin\llama-kvmem-server.exe
-#    runtime\share\kvmem\ui
-
-# 3. 启动界面
-pwsh -STA -File .\KVMem-Controller.ps1
+pwsh -NoProfile -File .\v0.18\Start-KVMem-v018.ps1 -Model 'D:\models\model.ninfer' -Port 18210 -VisionResidency resident -DryRun
 ```
 
-也可以直接命令行启动后端：
+5. 启动面板：
 
 ```powershell
-pwsh -File .\Start-KVMem.ps1 -Model "D:\models\Qwen2.5-7B-Instruct-Q4_K_M.gguf"
-pwsh -File .\Start-KVMem.ps1 -?    # 查看全部参数
+pwsh -NoProfile -STA -File .\v0.18\KVMem-v018-ControlPanel.ps1
 ```
 
-### 第一次使用建议
+面板和 API 默认使用 `http://127.0.0.1:18210/v1`。具体安装步骤见 [Windows 安装说明](v0.18/docs/installation.md)，长篇角色扮演参数见 [配置指南](v0.18/docs/configuration.md)。
 
-1. 先点 **刷新列表**，确认模型被识别。
-2. 看 **GPU 卸载层数**：默认自动读取模型层数，显存不够就取消"自动"再手动调低。
-3. 上下文长度不要一上来拉满，先 8192 试，稳定后再加。
-4. 启动后看活动日志，有报错会写在这里，也可以点 **查看运行日志** 看后端 stdout/stderr。
+### OpenAI 兼容客户端
 
----
+后端提供 OpenAI 兼容接口。用户可在自己的客户端中新建连接，并自行填写端口、模型 ID、上下文提示和回复上限；默认使用 `18210` 端口，实际模型 ID 以 `/v1/models` 返回值为准。仓库不附带第三方客户端配置、聊天、世界书或记忆数据。
 
-## 参数说明（容易踩坑的几个）
+### 视觉与性能
 
-| 参数 | 含义 | 建议 |
-|---|---|---|
-| GPU 卸载层数 | 放到显卡上的 Transformer 层数，`-1` 表示全部 | 显存够就拉满；OOM 就减半再试 |
-| 上下文长度 | 一次能容纳的 token 数 | 8K→16K→32K 逐步加，显存和 KV 缓存都要跟着涨 |
-| KVMem GPU 缓存预算 | KVMem 在显存里保留的 KV 缓存 token 上限 | 越大越省显存换速度，太小会频繁换出 |
-| KVMem CPU 缓存 (GiB) | 放在内存里的 KV 缓存 | 内存充足可给 2–8 GiB |
-| KV 缓存精度 | `f16` / `q8_0` / `q5_0` / `q4_0` | `q8_0` 基本无损且省一半显存 |
-| 逻辑/物理批大小 | batch / ubatch | 默认 256 / 128，显存紧张先降 ubatch |
-| 生成预留 | 给回复预留的 token | 至少要大于你期望的单次回复长度 |
-| 思考模式 | 是否禁用推理模型的思考段 | 普通模型选"禁用思考"响应更快 |
-
-> 采样参数只是**服务端默认值**。SillyTavern 请求里带的 `temperature`、`top_p` 等会覆盖这里的设置。
-
----
-
-## 接口
-
-- 地址：`http://127.0.0.1:18200/v1`
-- 只监听 `127.0.0.1`，不对外网开放
-- 模型别名：`kvmem-current`
-- 兼容 OpenAI 的 `/v1/chat/completions`、`/v1/models`
-
-SillyTavern 填法：API 选 `OpenAI`，反向代理填 `http://127.0.0.1:18200/v1`，模型名随便填（服务端只有一个模型）。
-
----
-
-## 环境要求
-
-- Windows 10/11 x64
-- PowerShell 7（便携包已内置）
-- NVIDIA 显卡 + 较新的驱动（本项目锁定的后端是 CUDA 13.2.86 构建）
-- 显存 ≥ 模型大小 + KV 缓存开销
-
-### GPU 兼容性
-
-启动时控制器会调用 `llama-kvmem-server.exe --list-devices` 枚举 CUDA 设备，并与后端的编译目标比对：
-
-| NVIDIA 世代 | 计算能力 | 锁定的后端 |
-|---|---:|---|
-| RTX 10（Pascal） | `sm_61` | 不支持，启动前拦截并说明 |
-| RTX 20（Turing） | `sm_75` | 支持 |
-| RTX 30（Ampere） | `sm_86` | 支持 |
-| RTX 40（Ada） | `sm_89` | 支持 |
-| RTX 50（Blackwell） | `sm_120a` | 支持 |
-
-这只代表**编译目标匹配**，不代表任何模型都塞得进显存，也不代表每张卡都做过推理实测。
-
----
-
-## 常见问题
-
-**启动后状态一直是"未就绪"**
-看活动日志和 **查看运行日志**。常见原因：显存不够、模型路径含中文、端口被占用、驱动版本过旧。
-
-**提示 18200 端口被其他程序占用**
-控制器只会停止自己启动的进程，不会误杀别的程序。先确认是谁占用：`Get-NetTCPConnection -LocalPort 18200 -State Listen`。
-
-**界面模糊 / 控件被裁切**
-程序会按系统 DPI 缩放。如果改过缩放比例，重启一次控制器即可。
-
-**模型列表是空的**
-确认 `models` 目录里有 `.gguf` 文件，或点 **选择目录** 换一个位置。目录不存在时程序会自动创建。
-
-**换模型后报 OOM**
-降低 GPU 卸载层数，或把上下文长度和 KV 缓存预算调小。
-
----
-
-## 目录结构
-
-```
-KVMem-Windows-Controller/
-├─ KVMem-Controller.ps1      主界面
-├─ KVMem-Localization.psm1   中英文案
-├─ KVMem-Compatibility.psm1  GPU 兼容性检查
-├─ Start-KVMem.ps1           启动后端
-├─ Stop-KVMem.ps1            停止后端
-├─ Open-KVMem-Controller.bat 双击入口
-├─ assets/kvmem.ico          图标
-├─ docs/ui-preview.png       界面预览
-├─ models/                   放 GGUF（不入库）
-├─ runtime/                  KVMem 后端（不入库）
-└─ codex/logs/               运行日志（不入库）
-```
-
----
-
-## 开发说明
-
-- 界面：WinForms + PowerShell 7，无第三方依赖
-- 缩放：`AutoScaleMode = None` + 自定义 `Px()` 按 `DeviceDpi/96` 缩放
-- 所有 UI 文案走 `KVMem-Localization.psm1`，新增文案请同时补中英两条
-- 修改后至少验证：语法解析、三个页签在中英文下是否完整可见、启动/停止全流程
+视觉默认可以使用 CPU；当转换产物包含视觉权重时，可切换为 GPU 常驻：
 
 ```powershell
-# 语法检查
-$e=$null; [System.Management.Automation.Language.Parser]::ParseFile(
-  (Resolve-Path .\KVMem-Controller.ps1), [ref]$null, [ref]$e) | Out-Null
-if ($e) { $e } else { 'parse OK' }
+pwsh -NoProfile -File .\v0.18\Start-KVMem-v018.ps1 -Model 'D:\models\model.ninfer' -Port 18210 -VisionResidency resident
 ```
 
-日志、进程号、模型文件都在 `.gitignore` 里，不会被提交。
+`resident` 会把视觉权重保留在 GPU 上，降低重复图片首次处理延迟，但会增加显存占用。先确认模型确实包含视觉权重；缺少权重时使用 `-NoVision`，不要只修改 residency。
 
-### 构建便携包
+### 文档
 
-`payloads` 目录不随仓库分发，需要先把两个上游压缩包放进去（文件名必须一致）：
+- [安装与运行 / Installation](v0.18/docs/installation.md)
+- [参数与长篇角色扮演配置 / Configuration](v0.18/docs/configuration.md)
+- [RAM/SSD 分层 / Active KV tiering](v0.18/docs/active-kv-tiering.md)
+- [故障排查 / Troubleshooting](v0.18/docs/troubleshooting.md)
+- [隐私与发布边界 / Privacy and release scope](v0.18/docs/privacy.md)
+- [本次变更 / Changes](v0.18/CHANGELOG.md)
+- [v0.18 来源记录 / Provenance](v0.18/provenance/)
 
-| 文件 | 来源 |
-|---|---|
-| `kvmem-v0.16.0-rc3-windows-x86_64-cuda13.2.86.zip` | [KVMem releases](https://github.com/kvmem/kvmem/releases/tag/v0.16.0-rc3) |
-| `PowerShell-7.6.7-win-x64.zip` | [PowerShell releases](https://github.com/PowerShell/PowerShell/releases/tag/v7.6.7) |
+### 验证边界
 
-然后执行：
+PowerShell 语法检查、JSON 解析和仓库扫描只能证明发布内容可解析、未发现已知隐私模式，不能代替真实 GPU 加载、视觉推理、长上下文压力测试或客户端实机对话。发布前请在自己的模型和驱动环境完成一次启动、`/v1/models`、流式对话和停止服务验收。
+
+### 许可证与致谢
+
+控制器和本仓库新增脚本使用 [MIT License](LICENSE)。KVMem、NInfer、CUDA 组件和其他第三方组件按各自许可证使用，相关文本保留在 [`v0.18/licenses/`](v0.18/licenses/)；详细来源和构建信息见 [`v0.18/BUILD-INFO.json`](v0.18/BUILD-INFO.json)。感谢 KVMem、NInfer 及其社区分支的维护者和贡献者。
+
+## English
+
+This repository provides a Windows controller for the [KVMem](https://github.com/kvmem/kvmem) local inference backend. It keeps the existing visual controller and adds **KVMem v0.18 NInfer controller source and parameter documentation**.
+
+> This is an independent community frontend, not an official KVMem repository. The inference engine, model format, and upstream licenses belong to their respective authors.
+
+### What v0.18 adds
+
+- A WinForms controller for `.ninfer` model discovery, KV budgets, vision, MTP, and sampling settings.
+- PowerShell start/stop entry points that bind to `127.0.0.1` by default.
+- Customizable context length, memory budgets, and vision settings.
+- Bilingual installation, configuration, privacy, and troubleshooting documentation.
+
+### What is not included
+
+This repository **does not include model weights, NInfer/llama.cpp runtime binaries, converter binaries, Python environments, logs, chats, lorebooks, API keys, or user configuration**. Download the v0.18 runtime matching your GPU architecture from the upstream release and place the `.ninfer` model in an English-only path. Models and runtimes are large and separately licensed, so they are not stored in Git history.
+
+### Quick start
+
+1. Install PowerShell 7 and a CUDA 13.2-compatible NVIDIA driver.
+2. Prepare `workers/ninfer/ninfer-kvmem-server.exe` for your GPU and a compatible `.ninfer` model.
+3. Choose your model and memory budgets in the panel, or pass them on the command line.
+4. Validate the launch arguments without starting the server:
 
 ```powershell
-pwsh -File .\Build-Portable.ps1
+pwsh -NoProfile -File .\v0.18\Start-KVMem-v018.ps1 -Model 'D:\models\model.ninfer' -Port 18210 -VisionResidency resident -DryRun
 ```
 
-脚本会复制源代码与两个 payload、打成 `dist\KVMem-Windows-Controller-Portable-v<版本>.zip`，并校验必需条目齐全、没有混入日志或模型。版本号取自 `package-manifest.json`。
+5. Open the panel:
 
----
+```powershell
+pwsh -NoProfile -STA -File .\v0.18\KVMem-v018-ControlPanel.ps1
+```
 
-## English summary
+The panel and API use `http://127.0.0.1:18210/v1` by default. See [Installation](v0.18/docs/installation.md) and [Configuration](v0.18/docs/configuration.md) for details.
 
-A Windows desktop GUI for the [KVMem](https://github.com/kvmem/kvmem) local inference server. Pick a GGUF model, tune VRAM / KV cache / sampling settings, start or stop the backend, and watch the logs — without typing llama.cpp flags.
+### OpenAI-compatible clients
 
-- Three settings tabs, all parameters visible without scrolling (125–200% scaling tested)
-- Automatic GGUF layer detection for GPU offload, bilingual UI (中文 / English)
-- `Ctrl+Enter` to start, `F5` to refresh
-- Endpoint: `http://127.0.0.1:18200/v1`, loopback only
+The backend exposes an OpenAI-compatible endpoint. Users can create their own client connection and choose the port, model ID, context hint, and response limit; the default port is `18210`, and the actual model ID comes from `/v1/models`. The repository does not ship third-party client settings, chats, lorebooks, or memory data.
 
-This is an independent community launcher. It does not modify KVMem, LM Studio, or any upstream project. See [Quick start](#使用说明) above (Chinese) for details.
+### Vision and performance
 
----
+Vision can run on CPU by default. If the converted artifact contains vision weights, GPU residency is available:
 
-## 致谢与许可
+```powershell
+pwsh -NoProfile -File .\v0.18\Start-KVMem-v018.ps1 -Model 'D:\models\model.ninfer' -Port 18210 -VisionResidency resident
+```
 
-- 推理后端、`llama-kvmem-server.exe`、CUDA 运行时均来自 [KVMem](https://github.com/kvmem/kvmem)，版权归上游作者所有，按其各自许可使用。
-- PowerShell 运行时来自 [PowerShell](https://github.com/PowerShell/PowerShell)。
-- 本仓库中的控制器与启动脚本使用 MIT License，见 [LICENSE](LICENSE)。
-- 第三方组件声明见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+`resident` keeps vision weights on the GPU, reducing repeated image latency at the cost of VRAM. Confirm the artifact contains vision weights; use `-NoVision` when they are absent rather than changing only the residency flag.
 
-如果这个项目对你有用，请先去给上游 [KVMem](https://github.com/kvmem/kvmem) 点个 Star。
+### Documentation
+
+- [Installation](v0.18/docs/installation.md)
+- [Configuration](v0.18/docs/configuration.md)
+- [Active KV tiering](v0.18/docs/active-kv-tiering.md)
+- [Troubleshooting](v0.18/docs/troubleshooting.md)
+- [Privacy and release scope](v0.18/docs/privacy.md)
+- [Changes in this release](v0.18/CHANGELOG.md)
+- [Provenance](v0.18/provenance/)
+
+### Validation boundary
+
+Parser checks, JSON parsing, and repository scans can show that the release is syntactically valid and that known privacy patterns are absent. They do **not** replace a real GPU load, vision request, long-context stress test, or client conversation. Before relying on this package, verify startup, `/v1/models`, streaming chat, and shutdown with your own model and driver.
+
+### License and acknowledgments
+
+The controller and new repository scripts are provided under the [MIT License](LICENSE). KVMem, NInfer, CUDA components, and other third-party components remain under their respective licenses; see [`v0.18/licenses/`](v0.18/licenses/) and [`v0.18/BUILD-INFO.json`](v0.18/BUILD-INFO.json). Thanks to the KVMem, NInfer, and community-branch maintainers and contributors.

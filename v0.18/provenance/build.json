@@ -1,0 +1,9 @@
+{
+  "series": "40",
+  "architecture": "89",
+  "source_commit": "938c2f1968b0283e7d7dd143918a9f3ff866dd4d",
+  "worker_sha256": "d6887e36cfc932c836905979ad0036b3a415f80d925cf2d3c852c934a7716370",
+  "configuration": "Release",
+  "hardware_inference_validated": false,
+  "local_build_paths_removed": true
+}

@@ -1,0 +1,1 @@
+usage: <runtime-root>\workers\ninfer\infer-kvmem-server.exe <model.ninfer> [options]
