@@ -8,6 +8,12 @@
 
 > 本项目是独立的第三方社区前端，不是 KVMem 官方仓库，也不代表 KVMem 上游作者。推理引擎、模型格式和上游许可证归各自作者所有。
 
+### v0.16：GGUF 便携版
+
+根目录控制器版本统一为 **v0.16**，使用 KVMem `v0.16.0-rc3` llama.cpp/GGUF 后端。下载 [v0.16 发布页](https://github.com/Faker123546789/KVMem-Windows-Controller/releases/tag/v0.16) 的 `KVMem-Windows-Controller-Portable-v0.16.zip`，解压后阅读包内 README，选择自己的 `.gguf` 模型。便携包包含后端与 PowerShell 7，不包含模型。
+
+入口为 `Open-KVMem-Controller.bat`，默认接口为 `http://127.0.0.1:18200/v1`。用户自行选择模型、参数和客户端连接。v0.16 的 GGUF 运行时与下方 v0.18 的 NInfer 运行时、模型格式分别配置。
+
 ### v0.18 包含什么
 
 - WinForms 控制器：扫描 `.ninfer` 模型、配置 KV 预算、视觉、MTP 和采样参数。
@@ -75,6 +81,12 @@ PowerShell 语法检查、JSON 解析和仓库扫描只能证明发布内容可�
 This repository provides a Windows controller for the [KVMem](https://github.com/kvmem/kvmem) local inference backend. It keeps the existing visual controller and adds **KVMem v0.18 NInfer controller source and parameter documentation**.
 
 > This is an independent community frontend, not an official KVMem repository. The inference engine, model format, and upstream licenses belong to their respective authors.
+
+### v0.16: GGUF portable edition
+
+The root controller is now labeled **v0.16** and uses the KVMem `v0.16.0-rc3` llama.cpp/GGUF backend. Download `KVMem-Windows-Controller-Portable-v0.16.zip` from the [v0.16 release](https://github.com/Faker123546789/KVMem-Windows-Controller/releases/tag/v0.16), extract it, and read its README before choosing your own `.gguf` model. The portable package includes the backend and PowerShell 7; models are supplied separately.
+
+Open `Open-KVMem-Controller.bat`; the default endpoint is `http://127.0.0.1:18200/v1`. Choose your own model, parameters, and client connection. Configure the v0.16 GGUF runtime separately from the v0.18 NInfer runtime and model format described below.
 
 ### What v0.18 adds
 

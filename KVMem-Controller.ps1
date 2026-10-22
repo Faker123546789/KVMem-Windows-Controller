@@ -4,7 +4,7 @@ param([string]$ModelRoot = (Join-Path $PSScriptRoot 'models'))
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$appVersion = '0.2.0'
+$appVersion = '0.16'
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -720,7 +720,7 @@ $budgetControl = Add-Numeric $kvTable 'KVMem GPU 缓存预算（tokens）' 0 262
 $reserveControl = Add-Numeric $kvTable '生成预留（tokens）' 0 65536 2048 0 128
 $cpuArenaControl = Add-Numeric $kvTable 'KVMem CPU 缓存（GiB）' 0 256 1
 
-$samplingTable = New-ParameterPage '生成与采样' '这里设置服务默认值；酒馆请求中的采样参数会覆盖对应的服务默认值。'
+$samplingTable = New-ParameterPage '生成与采样' '这里设置服务默认值；客户端请求中的采样参数会覆盖对应的服务默认值。'
 $maxTokensControl = Add-Numeric $samplingTable '最大生成长度（tokens，-1 = 不限）' -1 65536 2048 0 128
 $temperatureControl = Add-Numeric $samplingTable '温度（Temperature）' 0 2 0.7 2 0.05
 $topPControl = Add-Numeric $samplingTable 'Top-P' 0 1 0.8 2 0.05
@@ -733,7 +733,7 @@ $seedControl = Add-Numeric $samplingTable '随机种子（-1 = 随机）' -1 429
 $thinkingControl = Add-Choice $samplingTable '思考模式' @('禁用思考', '模型默认') '禁用思考'
 
 # API hint -------------------------------------------------------------------
-$hintText = if ((Get-KVMemUiLanguage) -eq 'en') { "SillyTavern API: http://127.0.0.1:18200/v1    Model: kvmem-current`r`nGPU backend: $($script:backendCompatibility.SummaryEnglish)" } else { "酒馆 API：http://127.0.0.1:18200/v1    模型：kvmem-current`r`nGPU 后端：$($script:backendCompatibility.Summary)" }
+$hintText = if ((Get-KVMemUiLanguage) -eq 'en') { "Client API: http://127.0.0.1:18200/v1    Model: kvmem-current`r`nGPU backend: $($script:backendCompatibility.SummaryEnglish)" } else { "客户端 API：http://127.0.0.1:18200/v1    模型：kvmem-current`r`nGPU 后端：$($script:backendCompatibility.Summary)" }
 $hintCard = New-CardPanel 14 10 $script:Ui.AccentSoft ([Drawing.Color]::FromArgb(191, 219, 254))
 $hintCard.Dock = 'Fill'
 $hintCard.AutoSize = $true
@@ -762,7 +762,7 @@ $webButton = New-UiButton '打开 KVMem 页面' 'secondary' 160
 $webButton.Margin = [Windows.Forms.Padding]::new(0, 0, 10, 8)
 $logsButton = New-UiButton '查看运行日志' 'secondary' 140
 $logsButton.Margin = [Windows.Forms.Padding]::new(0, 0, 10, 8)
-$copyButton = New-UiButton '复制酒馆地址' 'secondary' 140
+$copyButton = New-UiButton '复制客户端地址' 'secondary' 140
 $copyButton.Margin = [Windows.Forms.Padding]::new(0, 0, 10, 8)
 foreach ($button in @($action, $stopButton, $webButton, $logsButton, $copyButton)) { $actions.Controls.Add($button) }
 
@@ -942,9 +942,9 @@ function Apply-UiLanguage {
     $formText = Get-KVMemUiText $form.Text
     if ($formText -cne $form.Text) { $form.Text = $formText }
     $hintText = if ($language -eq 'en') {
-        "SillyTavern API: http://127.0.0.1:18200/v1    Model: kvmem-current`r`nGPU backend: $($script:backendCompatibility.SummaryEnglish)"
+        "Client API: http://127.0.0.1:18200/v1    Model: kvmem-current`r`nGPU backend: $($script:backendCompatibility.SummaryEnglish)"
     } else {
-        "酒馆 API：http://127.0.0.1:18200/v1    模型：kvmem-current`r`nGPU 后端：$($script:backendCompatibility.Summary)"
+        "客户端 API：http://127.0.0.1:18200/v1    模型：kvmem-current`r`nGPU 后端：$($script:backendCompatibility.Summary)"
     }
     $hint.Text = 'ⓘ  ' + $hintText
     $languageButton.Text = if ($language -eq 'en') { '中文' } else { 'English' }
@@ -1385,7 +1385,7 @@ $webButton.add_Click({ Invoke-UiAction {
 $logsButton.add_Click({ Invoke-UiAction { Show-ControllerLogs } })
 $copyButton.add_Click({ Invoke-UiAction {
             [Windows.Forms.Clipboard]::SetText('http://127.0.0.1:18200/v1')
-            Write-UiFeedback '已复制酒馆 API 地址。模型 ID：kvmem-current'
+            Write-UiFeedback '已复制客户端 API 地址。模型 ID：kvmem-current'
         } })
 $clearLogButton.add_Click({ $feedback.Clear(); Write-UiFeedback '已清空运行记录。' })
 
